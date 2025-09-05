@@ -21,6 +21,7 @@ jobs:
         with:
           flutter-version: 'stable'
           channel: 'stable'
+          cache: true
 
       - name: Flutter pub get
         run: flutter pub get
