@@ -1,3 +1,5 @@
+name: Flutter Android APK
+
 on:
   push:
     branches: ["main"]
@@ -19,7 +21,6 @@ jobs:
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
           channel: 'stable'
           cache: true
 
@@ -34,25 +35,3 @@ jobs:
         with:
           name: app-debug
           path: build/app/outputs/flutter-apk/app-debug.apk
-
-      # Optional: Release APK signing (requires secrets)
-      # - name: Decode keystore
-      #   if: ${{ secrets.CM_KEYSTORE != '' }}
-      #   run: |
-      #     mkdir -p android/app/keystore
-      #     echo "${{ secrets.CM_KEYSTORE }}" | base64 -d > android/app/keystore/release.jks
-      #     cat > android/key.properties << 'EOF'
-      #     storePassword=${{ secrets.CM_KEYSTORE_PASSWORD }}
-      #     keyPassword=${{ secrets.CM_KEY_ALIAS_PASSWORD }}
-      #     keyAlias=${{ secrets.CM_KEY_ALIAS_USERNAME }}
-      #     storeFile=keystore/release.jks
-      #     EOF
-      # - name: Build release APK
-      #   if: ${{ secrets.CM_KEYSTORE != '' }}
-      #   run: flutter build apk --release
-      # - name: Upload release APK
-      #   if: ${{ secrets.CM_KEYSTORE != '' }}
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: app-release
-      #     path: build/app/outputs/flutter-apk/app-release.apk
