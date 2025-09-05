@@ -2,34 +2,45 @@ name: Flutter Android APK
 
 on:
   push:
-    branches: ["main"]
-  workflow_dispatch:
+    branches: ["main"]     # يبني تلقائيًا عند أي push على فرع main
+  workflow_dispatch:        # تشغيل يدوي من تبويب Actions
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
+      # 1) جلب الكود
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2) إعداد جافا (مطلوب لجرادل/أندرويد)
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Flutter
+      # 3) تثبيت Flutter (قناة stable)
+      - name: Install Flutter (stable)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
+      # 4) جلب الاعتماديات
       - name: Flutter pub get
         run: flutter pub get
 
+      # 5) إصلاح مشروع أندرويد غير مدعوم (يعيد توليد هيكل android/ الحديث)
+      - name: Ensure modern Android Gradle project
+        run: flutter create --platforms=android --overwrite .
+
+      # 6) بناء APK (وضع Debug للتجربة السريعة)
       - name: Build debug APK
         run: flutter build apk --debug
 
+      # 7) رفع الـ APK كـ Artifact قابل للتنزيل
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
