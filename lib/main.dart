@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/rule.dart';
 import 'services/api_service.dart';
+import 'pages/logs_page.dart'; // 👈 جديد
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -203,6 +204,15 @@ class _RulesPageState extends State<RulesPage> {
       key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('قواعد الرد التلقائي'),
+        actions: [
+          IconButton(
+            tooltip: 'السجل',
+            icon: const Icon(Icons.history),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LogsPage()),
+            ),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _reload,
@@ -250,10 +260,9 @@ class _RulesPageState extends State<RulesPage> {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final r = rules[i];
-
                 return Dismissible(
                   key: ValueKey(r.id ?? '${r.keyword}-$i'),
-                  direction: DismissDirection.endToStart, // سحب لليسار
+                  direction: DismissDirection.endToStart,
                   background: Container(
                     color: Colors.red,
                     alignment: Alignment.centerRight,
