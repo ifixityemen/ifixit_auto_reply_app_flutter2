@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/rule.dart';
+import '../models/log_entry.dart';
 
 class ApiService {
   /// غيّر الرابط إلى رابط تطبيقك على Render
@@ -8,7 +9,7 @@ class ApiService {
 
   static Uri _u(String path) => Uri.parse('$baseUrl$path');
 
-  /// (اختياري) إن كان لديك مفتاح API في السيرفر، فعّله هنا وأرسله في الهيدرز
+  /// (اختياري) مفتاح API
   static const String? _apiKey = null; // مثلا: 'MY_SECRET';
   static Map<String, String> _headers({bool json = false}) => {
         if (json) 'Content-Type': 'application/json',
@@ -22,7 +23,9 @@ class ApiService {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       final body = jsonDecode(res.body);
       if (body is List) {
-        return body.map<Rule>((e) => Rule.fromJson(e as Map<String, dynamic>)).toList();
+        return body
+            .map<Rule>((e) => Rule.fromJson(e as Map<String, dynamic>))
+            .toList();
       }
       throw Exception('Unexpected response for GET /rules: ${res.body}');
     } else {
@@ -36,7 +39,11 @@ class ApiService {
     required String reply,
   }) async {
     final payload = jsonEncode({'keyword': keyword, 'reply': reply});
-    final res = await http.post(_u('/rules'), headers: _headers(json: true), body: payload);
+    final res = await http.post(
+      _u('/rules'),
+      headers: _headers(json: true),
+      body: payload,
+    );
 
     if (res.statusCode >= 200 && res.statusCode < 300) {
       final body = jsonDecode(res.body);
@@ -52,30 +59,4 @@ class ApiService {
 
   /// حذف قاعدة
   static Future<void> deleteRule(String id) async {
-    final res = await http.delete(_u('/rules/$id'), headers: _headers());
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('DELETE /rules/$id failed: ${res.statusCode} ${res.body}');
-    }
-  }
-
-  /// تحديث قاعدة
-  static Future<Rule> updateRule({
-    required String id,
-    required String keyword,
-    required String reply,
-  }) async {
-    final payload = jsonEncode({'keyword': keyword, 'reply': reply});
-    final res = await http.put(_u('/rules/$id'), headers: _headers(json: true), body: payload);
-
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      final body = jsonDecode(res.body);
-      if (body is Map<String, dynamic>) {
-        return Rule.fromJson(body);
-      }
-      // في حال ما رجّع جسم القاعدة بعد التحديث
-      return Rule(id: id, keyword: keyword, reply: reply);
-    } else {
-      throw Exception('PUT /rules/$id failed: ${res.statusCode} ${res.body}');
-    }
-  }
-}
+    final res = await http.dele
