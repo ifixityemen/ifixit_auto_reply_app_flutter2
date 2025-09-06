@@ -45,18 +45,4 @@ class ApiService {
       body: payload,
     );
 
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      final body = jsonDecode(res.body);
-      if (body is Map<String, dynamic>) {
-        return Rule.fromJson(body);
-      }
-      // في حال رجع السيرفر {success:true} فقط
-      return Rule(keyword: keyword, reply: reply);
-    } else {
-      throw Exception('POST /rules failed: ${res.statusCode} ${res.body}');
-    }
-  }
-
-  /// حذف قاعدة
-  static Future<void> deleteRule(String id) async {
-    final res = await http.dele
+    if (res.statusCode >= 200 && res.statusCode
