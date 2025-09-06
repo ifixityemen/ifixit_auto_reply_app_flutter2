@@ -2,52 +2,51 @@ name: Flutter Android APK
 
 on:
   push:
-    branches: ["main"]     # يبني تلقائيًا عند أي push على فرع main
-  workflow_dispatch:        # تشغيل يدوي من تبويب Actions
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      # 1) جلب الكود
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2) إعداد جافا (مطلوب لجرادل/أندرويد)
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3) تثبيت Flutter (قناة stable)
       - name: Install Flutter (stable)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
-      # 4) جلب الاعتماديات
       - name: Flutter pub get
         run: flutter pub get
 
-      # 5) توليد مجلد android (في حال مفقود)
-      - name: Ensure modern Android Gradle project
-        run: flutter create --platforms=android --overwrite .
+      # ⬇️ إنشاء android في مجلد مؤقت ثم نقله فقط (لا نلمس lib/)
+      - name: Generate Android scaffold without touching lib/
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android temp_scaffold
+            rm -rf android
+            mv temp_scaffold/android ./android
+            rm -rf temp_scaffold
+          fi
 
-      # 6) إضافة صلاحية الإنترنت داخل AndroidManifest.xml
+      # إذن الإنترنت
       - name: Add INTERNET permission
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.INTERNET' "$MANIFEST" || \
           sed -i 's#<manifest .*#&\n    <uses-permission android:name="android.permission.INTERNET"/>#' "$MANIFEST"
 
-      # 7) بناء APK (Debug)
       - name: Build debug APK
         run: flutter build apk --debug
 
-      # 8) رفع الـ APK كـ Artifact
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
