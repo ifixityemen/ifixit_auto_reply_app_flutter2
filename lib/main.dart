@@ -1,197 +1,198 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+import 'models/rule.dart';
+import 'services/api_service.dart';
 
-void main() => runApp(const MyApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const IfixitAutoReplyApp());
+}
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class IfixitAutoReplyApp extends StatelessWidget {
+  const IfixitAutoReplyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'iFixit Auto Reply',
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.deepPurple),
-      home: const HomePage(),
+      title: 'IFIXIT Auto-Reply',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+      ),
+      home: const RulesPage(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class RulesPage extends StatefulWidget {
+  const RulesPage({super.key});
+
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<RulesPage> createState() => _RulesPageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  final _baseUrlCtrl = TextEditingController();
-  String _status = 'جاهز';
-  List<dynamic> _rules = [];
+class _RulesPageState extends State<RulesPage> {
+  late Future<List<Rule>> _future;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
-    _loadBaseUrl();
+    _future = ApiService.fetchRules();
   }
 
-  Future<void> _loadBaseUrl() async {
-    final sp = await SharedPreferences.getInstance();
-    _baseUrlCtrl.text =
-        sp.getString('baseUrl') ?? 'https://wa-auto-reply-starter.onrender.com';
+  Future<void> _reload() async {
+    setState(() {
+      _future = ApiService.fetchRules();
+    });
+    await _future.catchError((_) {}); // لتفادي كسر الـ RefreshIndicator
   }
 
-  Future<void> _saveBaseUrl() async {
-    final url = _normalizedBaseUrl();
-    if (url == null) {
-      setState(() => _status = 'الرجاء إدخال رابط صحيح يبدأ بـ http/https');
-      return;
-    }
-    final sp = await SharedPreferences.getInstance();
-    await sp.setString('baseUrl', url);
-    setState(() => _status = 'تم حفظ الرابط.');
-  }
-
-  String? _normalizedBaseUrl() {
-    var url = _baseUrlCtrl.text.trim();
-    if (!url.startsWith('http')) return null;
-    url = url.replaceAll(RegExp(r'/+$'), '');
-    return url;
-  }
-
-  Future<void> _fetchRules() async {
-    final base = _normalizedBaseUrl();
-    if (base == null) {
-      setState(() => _status = 'أدخل رابطًا صحيحًا أولاً');
-      return;
-    }
-    setState(() => _status = 'جلب القواعد...');
-    try {
-      final res = await http
-          .get(Uri.parse('$base/rules'))
-          .timeout(const Duration(seconds: 30));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        setState(() {
-          _rules = (data is List) ? data : [];
-          _status = 'تم الجلب (${_rules.length}) قاعدة';
-        });
-      } else {
-        setState(() => _status = 'فشل الجلب: ${res.statusCode}');
-      }
-    } catch (e) {
-      setState(() => _status = 'خطأ في الاتصال: $e');
-    }
-  }
-
-  Future<void> _openAddRuleDialog() async {
+  Future<void> _showAddRuleDialog() async {
     final keywordCtrl = TextEditingController();
     final replyCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('إضافة قاعدة جديدة'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: keywordCtrl,
-              decoration: const InputDecoration(labelText: 'الكلمة المفتاحية'),
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('إضافة قاعدة جديدة'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: keywordCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'الكلمة المفتاحية (keyword)',
+                    hintText: 'مثال: مرحبا',
+                  ),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'أدخل الكلمة المفتاحية' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: replyCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'الرد (reply)',
+                    hintText: 'مثال: أهلاً وسهلاً بك 👋',
+                  ),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'أدخل نص الرد' : null,
+                  maxLines: 3,
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: replyCtrl,
-              decoration: const InputDecoration(labelText: 'نص الرد'),
-              maxLines: 3,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                try {
+                  final kw = keywordCtrl.text.trim();
+                  final rp = replyCtrl.text.trim();
+                  await ApiService.addRule(keyword: kw, reply: rp);
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('فشل إضافة القاعدة: $e')),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.save),
+              label: const Text('حفظ'),
             ),
           ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('حفظ')),
-        ],
-      ),
+        );
+      },
     );
 
-    if (ok == true) {
-      await _addRule(keywordCtrl.text.trim(), replyCtrl.text.trim());
-    }
-  }
-
-  Future<void> _addRule(String keyword, String reply) async {
-    if (keyword.isEmpty || reply.isEmpty) {
-      setState(() => _status = 'الحقول مطلوبة');
-      return;
-    }
-    final base = _normalizedBaseUrl();
-    if (base == null) {
-      setState(() => _status = 'أدخل رابطًا صحيحًا أولاً');
-      return;
-    }
-
-    setState(() => _status = 'جارٍ الإضافة...');
-    try {
-      final res = await http
-          .post(
-            Uri.parse('$base/rules'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'keyword': keyword, 'reply': reply}),
-          )
-          .timeout(const Duration(seconds: 30));
-
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        setState(() => _status = 'تمت الإضافة بنجاح ✅');
-        await _fetchRules(); // حدّث القائمة
-      } else {
-        setState(() => _status = 'فشل الإضافة: ${res.statusCode} - ${res.body}');
+    if (result == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تمت إضافة القاعدة بنجاح')),
+        );
+        _reload();
       }
-    } catch (e) {
-      setState(() => _status = 'خطأ في الاتصال أثناء الإضافة: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('لوحة iFixit')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text('Base URL (رابط الخادم):'),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _baseUrlCtrl,
-                  decoration: const InputDecoration(
-                    hintText: 'https://your-app.onrender.com',
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('قواعد الرد التلقائي'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _reload,
+        child: FutureBuilder<List<Rule>>(
+          future: _future,
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snap.hasError) {
+              return ListView(
+                children: [
+                  const SizedBox(height: 100),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'حدث خطأ أثناء تحميل القواعد:\n${snap.error}',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(onPressed: _saveBaseUrl, child: const Text('حفظ')),
-            ],
-          ),
-          const SizedBox(height: 16),
-          FilledButton.tonal(
-            onPressed: _fetchRules,
-            child: const Text('جلب القواعد من الخادم'),
-          ),
-          const SizedBox(height: 8),
-          Text(_status),
-          const Divider(height: 32),
-          const Text('القواعد:'),
-          ..._rules.map((r) => ListTile(
-                title: Text('${r['keyword'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                subtitle: Text('${r['reply'] ?? ''}', style: const TextStyle(fontSize: 16)),
-              )),
-          const SizedBox(height: 80),
-        ],
+                  const SizedBox(height: 12),
+                  Center(
+                    child: FilledButton.icon(
+                      onPressed: _reload,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('إعادة المحاولة'),
+                    ),
+                  ),
+                ],
+              );
+            }
+            final rules = snap.data ?? [];
+            if (rules.isEmpty) {
+              return ListView(
+                children: const [
+                  SizedBox(height: 100),
+                  Center(child: Text('لا توجد قواعد بعد. أضف أول قاعدة من الزر العائم (+).')),
+                ],
+              );
+            }
+            return ListView.separated(
+              itemCount: rules.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, i) {
+                final r = rules[i];
+                return ListTile(
+                  leading: const Icon(Icons.rule),
+                  title: Text(r.keyword),
+                  subtitle: Text(r.reply),
+                  trailing: (r.id != null) ? Text('#${r.id}') : null,
+                );
+              },
+            );
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddRuleDialog,
-        label: const Text('إضافة قاعدة'),
+        onPressed: _showAddRuleDialog,
         icon: const Icon(Icons.add),
+        label: const Text('إضافة قاعدة'),
       ),
     );
   }
