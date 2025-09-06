@@ -125,6 +125,78 @@ class _RulesPageState extends State<RulesPage> {
     }
   }
 
+  /// Dialog تعديل القاعدة
+  Future<void> _showEditDialog(Rule r) async {
+    if (r.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يمكن التعديل: لا يوجد معرّف (id) للقاعدة')),
+      );
+      return;
+    }
+
+    final kw = TextEditingController(text: r.keyword);
+    final rp = TextEditingController(text: r.reply);
+    final formKey = GlobalKey<FormState>();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('تعديل القاعدة'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: kw,
+                decoration: const InputDecoration(labelText: 'الكلمة المفتاحية (keyword)'),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'أدخل الكلمة' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: rp,
+                decoration: const InputDecoration(labelText: 'الرد (reply)'),
+                maxLines: 3,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'أدخل الرد' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await ApiService.updateRule(
+                  id: r.id!,
+                  keyword: kw.text.trim(),
+                  reply: rp.text.trim(),
+                );
+                if (context.mounted) Navigator.pop(context, true);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('فشل التعديل: $e')));
+                }
+              }
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم التعديل')),
+        );
+        _reload();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -178,11 +250,83 @@ class _RulesPageState extends State<RulesPage> {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final r = rules[i];
-                return ListTile(
-                  leading: const Icon(Icons.rule),
-                  title: Text(r.keyword),
-                  subtitle: Text(r.reply),
-                  trailing: (r.id != null) ? Text('#${r.id}') : null,
+
+                return Dismissible(
+                  key: ValueKey(r.id ?? '${r.keyword}-$i'),
+                  direction: DismissDirection.endToStart, // سحب لليسار
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  confirmDismiss: (_) async {
+                    if (r.id == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('لا يمكن الحذف: لا يوجد معرّف (id)')),
+                      );
+                      return false;
+                    }
+                    return await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('حذف القاعدة'),
+                            content: Text('هل تريد حذف "${r.keyword}"؟'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('إلغاء'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('حذف'),
+                              ),
+                            ],
+                          ),
+                        ) ??
+                        false;
+                  },
+                  onDismissed: (_) async {
+                    try {
+                      if (r.id != null) {
+                        await ApiService.deleteRule(r.id!);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم حذف القاعدة')),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('فشل الحذف: $e')),
+                        );
+                      }
+                    } finally {
+                      _reload();
+                    }
+                  },
+                  child: ListTile(
+                    leading: const Icon(Icons.rule),
+                    title: Text(r.keyword),
+                    subtitle: Text(r.reply),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (r.id != null)
+                          Padding(
+                            padding: const EdgeInsetsDirectional.only(end: 8.0),
+                            child: Text('#${r.id!}'),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          tooltip: 'تعديل',
+                          onPressed: () => _showEditDialog(r),
+                        ),
+                      ],
+                    ),
+                    onLongPress: () => _showEditDialog(r),
+                  ),
                 );
               },
             );
