@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/rule.dart';
 import 'services/api_service.dart';
-import 'pages/logs_page.dart'; // 👈 جديد
+import 'pages/logs_page.dart'; // 👈 جديد 
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
