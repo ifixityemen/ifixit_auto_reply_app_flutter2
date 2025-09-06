@@ -1,0 +1,55 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../models/rule.dart';
+
+class ApiService {
+  // عدّل هذا إلى رابط تطبيقك على Render
+  static const String baseUrl = 'https://wa-auto-reply-starter.onrender.com';
+
+  static Uri _u(String path) => Uri.parse('$baseUrl$path');
+
+  /// إرجاع كل القواعد
+  static Future<List<Rule>> fetchRules() async {
+    final res = await http.get(_u('/rules'), headers: {
+      'Accept': 'application/json',
+    });
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final body = jsonDecode(res.body);
+      if (body is List) {
+        return body.map((e) => Rule.fromJson(e)).toList();
+      } else {
+        throw Exception('Unexpected response for GET /rules');
+      }
+    } else {
+      throw Exception('GET /rules failed: ${res.statusCode} ${res.body}');
+    }
+  }
+
+  /// إضافة قاعدة جديدة
+  static Future<Rule> addRule({required String keyword, required String reply}) async {
+    final payload = jsonEncode({'keyword': keyword, 'reply': reply});
+
+    final res = await http.post(
+      _u('/rules'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: payload,
+    );
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final body = jsonDecode(res.body);
+      if (body is Map<String, dynamic>) {
+        return Rule.fromJson(body);
+      } else {
+        // بعض السيرفرات ترجع { success: true } بدون جسم القاعدة
+        // في هذه الحالة نعيد جسمًا محليًا كي نحدّث القائمة يدويًا
+        return Rule(keyword: keyword, reply: reply);
+      }
+    } else {
+      throw Exception('POST /rules failed: ${res.statusCode} ${res.body}');
+    }
+  }
+}
