@@ -6,10 +6,12 @@ class Rule {
   Rule({this.id, required this.keyword, required this.reply});
 
   factory Rule.fromJson(Map<String, dynamic> json) {
+    final anyId = (json['id'] ?? json['_id'] ?? json['ruleId'] ?? json['uuid']);
     return Rule(
-      id: json['id']?.toString(),
-      keyword: json['keyword']?.toString() ?? '',
-      reply: json['reply']?.toString() ?? '',
+      id: anyId?.toString(),
+      // لو السيرفر يستخدم أسماء مختلفة غيّرها هنا:
+      keyword: (json['keyword'] ?? json['key'] ?? json['phrase'] ?? '').toString(),
+      reply: (json['reply'] ?? json['response'] ?? json['text'] ?? '').toString(),
     );
   }
 
