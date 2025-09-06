@@ -32,15 +32,22 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      # 5) إصلاح مشروع أندرويد غير مدعوم (يعيد توليد هيكل android/ الحديث)
+      # 5) توليد مجلد android (في حال مفقود)
       - name: Ensure modern Android Gradle project
         run: flutter create --platforms=android --overwrite .
 
-      # 6) بناء APK (وضع Debug للتجربة السريعة)
+      # 6) إضافة صلاحية الإنترنت داخل AndroidManifest.xml
+      - name: Add INTERNET permission
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.INTERNET' "$MANIFEST" || \
+          sed -i 's#<manifest .*#&\n    <uses-permission android:name="android.permission.INTERNET"/>#' "$MANIFEST"
+
+      # 7) بناء APK (Debug)
       - name: Build debug APK
         run: flutter build apk --debug
 
-      # 7) رفع الـ APK كـ Artifact قابل للتنزيل
+      # 8) رفع الـ APK كـ Artifact
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
