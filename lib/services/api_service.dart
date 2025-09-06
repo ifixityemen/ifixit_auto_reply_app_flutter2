@@ -3,53 +3,79 @@ import 'package:http/http.dart' as http;
 import '../models/rule.dart';
 
 class ApiService {
-  // عدّل هذا إلى رابط تطبيقك على Render
+  /// غيّر الرابط إلى رابط تطبيقك على Render
   static const String baseUrl = 'https://wa-auto-reply-starter.onrender.com';
 
   static Uri _u(String path) => Uri.parse('$baseUrl$path');
 
+  /// (اختياري) إن كان لديك مفتاح API في السيرفر، فعّله هنا وأرسله في الهيدرز
+  static const String? _apiKey = null; // مثلا: 'MY_SECRET';
+  static Map<String, String> _headers({bool json = false}) => {
+        if (json) 'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (_apiKey != null) 'x-api-key': _apiKey!,
+      };
+
   /// إرجاع كل القواعد
   static Future<List<Rule>> fetchRules() async {
-    final res = await http.get(_u('/rules'), headers: {
-      'Accept': 'application/json',
-    });
-
+    final res = await http.get(_u('/rules'), headers: _headers());
     if (res.statusCode >= 200 && res.statusCode < 300) {
       final body = jsonDecode(res.body);
       if (body is List) {
-        return body.map((e) => Rule.fromJson(e)).toList();
-      } else {
-        throw Exception('Unexpected response for GET /rules');
+        return body.map<Rule>((e) => Rule.fromJson(e as Map<String, dynamic>)).toList();
       }
+      throw Exception('Unexpected response for GET /rules: ${res.body}');
     } else {
       throw Exception('GET /rules failed: ${res.statusCode} ${res.body}');
     }
   }
 
   /// إضافة قاعدة جديدة
-  static Future<Rule> addRule({required String keyword, required String reply}) async {
+  static Future<Rule> addRule({
+    required String keyword,
+    required String reply,
+  }) async {
     final payload = jsonEncode({'keyword': keyword, 'reply': reply});
-
-    final res = await http.post(
-      _u('/rules'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: payload,
-    );
+    final res = await http.post(_u('/rules'), headers: _headers(json: true), body: payload);
 
     if (res.statusCode >= 200 && res.statusCode < 300) {
       final body = jsonDecode(res.body);
       if (body is Map<String, dynamic>) {
         return Rule.fromJson(body);
-      } else {
-        // بعض السيرفرات ترجع { success: true } بدون جسم القاعدة
-        // في هذه الحالة نعيد جسمًا محليًا كي نحدّث القائمة يدويًا
-        return Rule(keyword: keyword, reply: reply);
       }
+      // في حال رجع السيرفر {success:true} فقط
+      return Rule(keyword: keyword, reply: reply);
     } else {
       throw Exception('POST /rules failed: ${res.statusCode} ${res.body}');
+    }
+  }
+
+  /// حذف قاعدة
+  static Future<void> deleteRule(String id) async {
+    final res = await http.delete(_u('/rules/$id'), headers: _headers());
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('DELETE /rules/$id failed: ${res.statusCode} ${res.body}');
+    }
+  }
+
+  /// تحديث قاعدة
+  static Future<Rule> updateRule({
+    required String id,
+    required String keyword,
+    required String reply,
+  }) async {
+    final payload = jsonEncode({'keyword': keyword, 'reply': reply});
+    final res = await http.put(_u('/rules/$id'), headers: _headers(json: true), body: payload);
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final body = jsonDecode(res.body);
+      if (body is Map<String, dynamic>) {
+        return Rule.fromJson(body);
+      }
+      // في حال ما رجّع جسم القاعدة بعد التحديث
+      return Rule(id: id, keyword: keyword, reply: reply);
+    } else {
+      throw Exception('PUT /rules/$id failed: ${res.statusCode} ${res.body}');
     }
   }
 }
